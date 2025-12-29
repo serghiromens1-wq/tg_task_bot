@@ -1,0 +1,92 @@
+nano import re
+import asyncio
+from datetime import datetime, time
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.enums import ParseMode
+
+TOKEN = "8055579353:AAHvWCK4VOC6eDMvy0hkaL6_exnhn-t5EuU"
+
+bot = Bot(TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
+
+tasks = {}  # message_id -> task data
+
+
+def build_button(text, callback_data="done"):
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=callback_data)]]
+    )
+
+
+@dp.message(F.text.startswith("Таск:"))
+async def create_task(message: Message):
+    text = message.text
+
+    task_match = re.search(r"Таск:\s*(.+)", text)
+    time_match = re.search(r"Час:\s*(.+)", text)
+
+    task_text = task_match.group(1).strip() if task_match else "Без назви"
+    time_text = time_match.group(1).strip().lower() if time_match else "без дедлайну"
+
+    if time_text == "весь день":
+        button_text = "⬜️ Весь день"
+        deadline = None
+    elif re.match(r"\d{1,2}:\d{2}", time_text):
+        button_text = f"⬜️ до {time_text}"
+        h, m = map(int, time_text.split(":"))
+        deadline = time(h, m)
+    else:
+        button_text = "⬜️ Без дедлайну"
+        deadline = None
+
+    await message.edit_text(task_text)
+    await message.edit_reply_markup(reply_markup=build_button(button_text))
+
+    tasks[message.message_id] = {
+        "chat_id": message.chat.id,
+        "deadline": deadline,
+        "done": False
+    }
+
+
+@dp.callback_query(F.data == "done")
+async def mark_done(call: CallbackQuery):
+    msg = call.message
+    user = call.from_user.first_name
+    now = datetime.now().strftime("%H:%M")
+
+    await msg.edit_reply_markup(
+        reply_markup=build_button(f"✅ Виконано: {user} ({now})", "locked")
+    )
+
+    await call.answer("Задачу закрито")
+
+
+async def deadline_watcher():
+    while True:
+        now = datetime.now().time()
+        for msg_id, data in list(tasks.items()):
+            if data["done"] or not data["deadline"]:
+                continue
+
+            if now >= data["deadline"]:
+                try:
+                    await bot.edit_message_reply_markup(
+                        chat_id=data["chat_id"],
+                        message_id=msg_id,
+                        reply_markup=build_button("🟥 Прострочено", "locked")
+                    )
+                    data["done"] = True
+                except:
+                    pass
+        await asyncio.sleep(30)
+
+
+async def main():
+    asyncio.create_task(deadline_watcher())
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
