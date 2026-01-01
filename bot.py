@@ -66,7 +66,9 @@ def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
 
 # ======== СТВОРЕННЯ ТАСКУ ========
 
-@dp.message(F.text == "/ping")
+from aiogram.filters import Command
+
+@dp.message(Command(commands=["ping"]))
 async def ping(message: Message):
     await message.answer("🟢 Бот живий")
 
