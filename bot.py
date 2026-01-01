@@ -51,7 +51,7 @@ def extract_deadline(task_text: str):
 
 def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
     if done:
-        text = f"✅ Виконано: {user} ({datetime.now(ZoneInfo("Europe/Kiev")).strftime('%H:%M')})"
+        text = f"✅ Виконано: {user} ({datetime.now(ZoneInfo('Europe/Kiev')).strftime('%H:%M')})"
         if executed_date:
             text += f" {executed_date}"
         return InlineKeyboardMarkup(
