@@ -2,8 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY . .
+# Спочатку залежності (для кешу)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir aiogram flask
+# Потім код
+COPY . .
 
 CMD ["python", "bot.py"]
