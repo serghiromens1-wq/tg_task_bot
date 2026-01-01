@@ -66,6 +66,10 @@ def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
 
 # ======== СТВОРЕННЯ ТАСКУ ========
 
+@dp.message(F.text == "/ping")
+async def ping(message: Message):
+    await message.answer("🟢 Бот живий")
+
 @dp.message(F.text)
 async def create_task(msg: Message):
     after_trigger = parse_task(msg.text)
