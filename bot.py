@@ -1,7 +1,8 @@
 import asyncio
 import re
-from zoneinfo import ZoneInfo
 from datetime import datetime
+import pytz
+KYIV_TZ = pytz.timezone("Europe/Kiev")
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
@@ -38,7 +39,7 @@ def extract_deadline(task_text: str):
         time_str = pattern.group(2).strip()
         try:
             h, m = map(int, time_str.split(":"))
-            deadline = datetime.now(ZoneInfo("Europe/Kiev")).replace(hour=h, minute=m, second=0, microsecond=0)
+            deadline = datetime.now(KYIV_TZ).replace(hour=h, minute=m, second=0, microsecond=0)
             display_time = f"⏰ До {time_str}"
             text_only = task_text[:pattern.start()].strip()
         except:
@@ -51,7 +52,7 @@ def extract_deadline(task_text: str):
 
 def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
     if done:
-        text = f"✅ Виконано: {user} ({datetime.now(ZoneInfo('Europe/Kiev')).strftime('%H:%M')})"
+        text = f"✅ Виконано: {user} ({datetime.now(KYIV_TZ).strftime('%H:%M')})"
         if executed_date:
             text += f" {executed_date}"
         return InlineKeyboardMarkup(
@@ -94,7 +95,7 @@ async def create_task(msg: Message):
         "display_time": display_time,
         "done": False,
         "overdue": False,
-        "last_day": datetime.now(ZoneInfo("Europe/Kiev")).date()
+        "last_day": datetime.now(KYIV_TZ).date()
     }
 
 # ======== НАТИСКАННЯ КНОПКИ ========
@@ -115,7 +116,7 @@ async def done_task(call):
     if task["display_time"]:
         second_line = task["display_time"]
         if task["overdue"]:
-            executed_date = datetime.now(ZoneInfo("Europe/Kiev")).strftime("%d.%m")
+            executed_date = datetime.now(KYIV_TZ).strftime("%d.%m")
             second_line = second_line.replace("⏰", "🟥")
             if f"({executed_date})" not in second_line:
                 second_line += f" ({executed_date})"
@@ -136,7 +137,7 @@ async def done_task(call):
 
 async def scheduler():
     while True:
-        now = datetime.now(ZoneInfo("Europe/Kiev"))
+        now = datetime.now(KYIV_TZ)
         for mid, task in list(tasks.items()):
             if task["done"]:
                 continue
