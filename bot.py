@@ -53,7 +53,7 @@ def extract_deadline(task_text: str):
 def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
     if done:
         text = f"✅ {user} {datetime.now(KYIV_TZ).strftime('%H:%M')}"
-        if executed_date is not None:
+        if executed_date:
             text += f" ({executed_date})"
         return InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=text, callback_data="done")]]
@@ -128,7 +128,7 @@ async def done_task(call):
     await msg.edit_text(full_text, reply_markup=build_keyboard(
         done=True,
         user=call.from_user.first_name,
-        executed_date=f"({executed_date})"
+        executed_date=executed_date.strftime("%d.%m") if executed_date else None
     ))
 
     await call.answer("Готово")
