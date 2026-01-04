@@ -127,8 +127,9 @@ async def done_task(call):
 
     await msg.edit_text(full_text, reply_markup=build_keyboard(
         done=True,
+	overdue=task.get("overdue", False),
         user=call.from_user.first_name,
-        executed_date=executed_date.strftime("%d.%m") if executed_date else None
+        executed_date=datetime.now(KYIV_TZ).strftime("%d.%m") if task.get("overdue") else None
     ))
 
     await call.answer("Готово")
@@ -149,8 +150,10 @@ async def scheduler():
                     text = f"<b>{task['text']}</b>\n{task['display_time']} ({now.strftime('%d.%m')})"
                     sent = await bot.send_message(chat_id, text, reply_markup=build_keyboard(overdue=True))
                     await bot.delete_message(chat_id, mid)
-                    tasks[sent.message_id] = task.copy()
-                    tasks[sent.message_id]["overdue"] = True
+                    task_copy = task.copy()
+                    task_copy["overdue"] = True
+                    task_copy["done"] = False  # кнопка ще доступна
+                    tasks[sent.message_id] = task_copy
                     del tasks[mid]
 
             # Таски без часу дублюємо щодня після 20:00
@@ -165,7 +168,10 @@ async def scheduler():
                 text = f"<b>{task['text']}</b>\n{task['display_time']} ({now.strftime('%d.%m')})"
                 sent = await bot.send_message(chat_id, text, reply_markup=build_keyboard(overdue=True))
                 task["last_day"] = now.date()
-                tasks[sent.message_id] = task.copy()
+                task_copy = task.copy()
+                task_copy["overdue"] = True
+                task_copy["done"] = False  # кнопка ще доступна
+                tasks[sent.message_id] = task_copy
                 del tasks[mid]
 
         await asyncio.sleep(30)
