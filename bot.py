@@ -16,8 +16,7 @@ dp = Dispatcher()
 tasks = {}  # message_id -> task data
 
 TRIGGERS = [
-    "Задача:", "Задача", "задача:", "задача",
-    "Таск:", "Таск", "таск:", "таск", ":"
+    "Задача:", "Задача", "задача:", "задача", ":"
 ]
 
 # ======== ФУНКЦІЇ ========
@@ -70,9 +69,34 @@ def build_keyboard(done=False, overdue=False, user=None, executed_date=None):
 
 from aiogram.filters import Command
 
-@dp.message(Command(commands=["ping"]))
+@dp.message(Command(commands=["start"]))
 async def ping(message: Message):
-    await message.answer("🟢 Бот живий")
+    await message.answer("🟢 Бот живий\nНапиши /menu для інструкції")
+
+@dp.message(Command(commands=["menu"]))
+async def ping(message: Message):
+    await message.answer("<b>1️⃣ Напиши в чат будь-яке із слів-тригерів:</b>\n"
+    "Задача:\n"
+    "Задача\n"
+    "задача:\n"
+    "задача\n"
+    ":\n"
+    "<b>і напиши що потрібно зробити, наприклад:</b>\n"
+    "Задача: завезти тару\n"
+    "задача завезти тару\n"
+    "<b>або просто</b>\n"
+    ": завезти тару\n\n"
+    "<b>👌 Бот сформує задачу із твого повідомлення ✅</b>\n\n"
+    "<b>2️⃣ Якщо напишеш тригер часу:</b>\n"
+    "Задача: тара\n"
+    "Час: 17:30\n"
+    "<b>або просто</b>\n"
+    ": тара час: 17:30\n\n"
+    "<b>⏰ Бот сформує задачу з таймером (дедлайном), до якого часу її потрібно виконати.</b>\n\n"
+    "<b>🟥 Після закінчення вказаного часу, завдання перетвориться на прострочене.</b>\n\n"
+    "<b>✅ Виконати прострочене завдання можна. 👍</b>\n\n"
+    "<b>🟥 Прострочене завдання перейде до низу чату як термінове до виконання.</b>\n\n"
+    "<b>⏰ Всі невиконані завдання за день перемістяться в низ чату після 20:00.</b>")
 
 @dp.message(F.text)
 async def create_task(msg: Message):
@@ -95,7 +119,7 @@ async def create_task(msg: Message):
         "display_time": display_time,
         "done": False,
         "overdue": False,
-        "last_day": datetime.now(KYIV_TZ).date()
+        "last_day": None   # ← КРИТИЧНО
     }
 
 # ======== НАТИСКАННЯ КНОПКИ ========
@@ -134,43 +158,59 @@ async def done_task(call):
 
     await call.answer("Готово")
 
-# ======== СХЕДУЛЕР ========
+# ======== SCHEDULER ========
+DAILY_HOUR = 16
+DAILY_MINUTE = 30
 
 async def scheduler():
     while True:
         now = datetime.now(KYIV_TZ)
+
         for mid, task in list(tasks.items()):
             if task["done"]:
                 continue
+
             chat_id = task["chat_id"]
 
-            # Прострочене
-            if task["deadline"] and now >= task["deadline"]:
-                if not task["overdue"]:
-                    text = f"<b>{task['text']}</b>\n{task['display_time']} ({now.strftime('%d.%m')})"
-                    sent = await bot.send_message(chat_id, text, reply_markup=build_keyboard(overdue=True))
-                    await bot.delete_message(chat_id, mid)
-                    task_copy = task.copy()
-                    task_copy["overdue"] = True
-                    task_copy["done"] = False  # кнопка ще доступна
-                    tasks[sent.message_id] = task_copy
-                    del tasks[mid]
-
-            # Таски без часу дублюємо щодня після 20:00
-            if not task["deadline"] and now.hour == 20 and task["last_day"] < now.date():
-                sent = await bot.send_message(chat_id, f"<b>{task['text']}</b>", reply_markup=build_keyboard())
-                task["last_day"] = now.date()
-                tasks[sent.message_id] = task.copy()
-                del tasks[mid]
-
-            # Прострочене дублюємо щодня після 20:00
-            if task["deadline"] and task["overdue"] and now.hour == 20 and task["last_day"] < now.date():
-                text = f"<b>{task['text']}</b>\n{task['display_time']} ({now.strftime('%d.%m')})"
+            # 1) Прострочене вперше
+            if task["deadline"] and not task["overdue"] and now >= task["deadline"]:
+                text = f"<b>{task['text']}</b>\n{task['display_time']}"  # без дати
                 sent = await bot.send_message(chat_id, text, reply_markup=build_keyboard(overdue=True))
-                task["last_day"] = now.date()
+                await bot.delete_message(chat_id, mid)
+
                 task_copy = task.copy()
                 task_copy["overdue"] = True
-                task_copy["done"] = False  # кнопка ще доступна
+                task_copy["last_day"] = None  # ← щоб сьогодні ввечері ще раз продублювався
+                tasks[sent.message_id] = task_copy
+                del tasks[mid]
+                continue
+
+            # 2) Щоденне дублювання (для всіх невиконаних)
+            # Перевірка: ще не дубльовано сьогодні і настав час
+            daily_due = (task["last_day"] is None or task["last_day"] < now.date())
+            after_daily_time = now.hour > DAILY_HOUR or (now.hour == DAILY_HOUR and now.minute >= DAILY_MINUTE)
+
+            if daily_due and after_daily_time:
+                # Видаляємо старе повідомлення
+                await bot.delete_message(chat_id, mid)
+
+                # Формуємо текст
+                if task["deadline"] and task["overdue"]:
+                    text = f"<b>{task['text']}</b>\n{task['display_time']} ({task['deadline'].strftime('%d.%m')})"
+                    keyboard = build_keyboard(overdue=True)
+                elif task["deadline"]:
+                    text = f"<b>{task['text']}</b>\n{task['display_time']}"
+                    keyboard = build_keyboard()
+                else:
+                    text = f"<b>{task['text']}</b>"
+                    keyboard = build_keyboard()
+
+                # Відправляємо дубльоване повідомлення
+                sent = await bot.send_message(chat_id, text, reply_markup=keyboard)
+
+                # Оновлюємо last_day, щоб дублювання було лише один раз
+                task_copy = task.copy()
+                task_copy["last_day"] = now.date()
                 tasks[sent.message_id] = task_copy
                 del tasks[mid]
 
