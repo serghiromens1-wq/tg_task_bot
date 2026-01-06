@@ -159,8 +159,8 @@ async def done_task(call):
     await call.answer("Готово")
 
 # ======== SCHEDULER ========
-DAILY_HOUR = 16
-DAILY_MINUTE = 30
+DAILY_HOUR = 20
+DAILY_MINUTE = 5
 
 async def scheduler():
     while True:
